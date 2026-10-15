@@ -40,6 +40,9 @@
   .chip.warn { color: var(--warn); }
   .links { display: flex; gap: 12px; font-size: 13px; }
   .links a { color: var(--accent); text-decoration: none; }
+  .release { font-size: 13px; color: var(--muted); }
+  .release a { color: var(--accent); text-decoration: none; font-weight: 600; }
+  .release a:hover { text-decoration: underline; }
   .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
   .status { color: var(--muted); padding: 24px 0; text-align: center; }
   details { margin-top: 28px; color: var(--muted); font-size: 13px; }
@@ -99,6 +102,8 @@ const store = {
   set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} }
 };
 let repos = [];
+const releases = {}; // full_name -> release object, null (none) or undefined (loading)
+const RELEASE_TTL = 15 * 60e3; // cache releases for 15 min to stay within the API rate limit
 
 async function gh(path, token) {
   const headers = { Accept: "application/vnd.github+json" };
@@ -135,10 +140,43 @@ async function load() {
     const langs = [...new Set(repos.map(r => r.language).filter(Boolean))].sort();
     $("lang").innerHTML = '<option value="">All languages</option>' + langs.map(l => `<option>${esc(l)}</option>`).join("");
     render();
+    loadReleases(token);
   } catch (e) {
     if (token && /401/.test(e.message)) { store.set("gh_token", null); return load(); }
     $("status").textContent = e.message;
   }
+}
+
+async function loadReleases(token) {
+  let cache = {};
+  try { cache = JSON.parse(store.get("releases") || "{}"); } catch {}
+  const fresh = Date.now() - (cache.at || 0) < RELEASE_TTL && cache.withToken === !!token;
+  const data = fresh ? cache.data : {};
+  await Promise.all(repos.map(async r => {
+    if (r.full_name in data && data[r.full_name]?.pushed === r.pushed_at) {
+      releases[r.full_name] = data[r.full_name].rel;
+      return;
+    }
+    try {
+      // newest non-draft release, prereleases included
+      const list = await gh(`/repos/${r.full_name}/releases?per_page=5`, token);
+      const rel = list.find(x => !x.draft);
+      releases[r.full_name] = rel ? { tag: rel.tag_name, name: rel.name, url: rel.html_url,
+        date: rel.published_at || rel.created_at, pre: rel.prerelease } : null;
+      data[r.full_name] = { pushed: r.pushed_at, rel: releases[r.full_name] };
+    } catch { releases[r.full_name] = null; }
+  }));
+  store.set("releases", JSON.stringify({ at: fresh ? cache.at : Date.now(), withToken: !!token, data }));
+  render();
+}
+
+function releaseHtml(r) {
+  const rel = releases[r.full_name];
+  if (rel === undefined) return `<div class="release">Release: …</div>`;
+  if (!rel) return `<div class="release">No releases</div>`;
+  return `<div class="release">Latest release:
+    <a href="${esc(rel.url)}" target="_blank" rel="noopener">${esc(rel.tag)}</a>
+    ${rel.pre ? `<span class="chip warn">pre-release</span>` : ""} · ${ago(rel.date)}</div>`;
 }
 
 function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
@@ -184,6 +222,7 @@ function render() {
         ${(r.topics || []).map(t => `<span class="chip">${esc(t)}</span>`).join("")}
         <span>· ${ago(r.pushed_at)}</span>
       </div>
+      ${releaseHtml(r)}
       ${pages || home ? `<div class="links">
         ${pages ? `<a href="${esc(pages)}" target="_blank" rel="noopener">Pages ↗</a>` : ""}
         ${home ? `<a href="${esc(home)}" target="_blank" rel="noopener">Website ↗</a>` : ""}
