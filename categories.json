@@ -39,7 +39,8 @@
     "name": "Tools & Utilities",
     "description": "Standalone tools",
     "repos": [
-      "apk-uploader"
+      "apk-uploader",
+      "model-to-ollama"
     ]
   }
 ]
