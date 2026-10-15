@@ -97,7 +97,7 @@
 
 <script>
 const USER = "4uva4ek";
-const SELF = USER.toLowerCase() + ".github.io";
+const HIDDEN = [USER.toLowerCase() + ".github.io", ".github"]; // never shown in the catalog
 const LANG_COLORS = { JavaScript:"#f1e05a", TypeScript:"#3178c6", Python:"#3572A5", "C++":"#f34b7d", C:"#555555",
   "C#":"#178600", Java:"#b07219", Kotlin:"#A97BFF", Go:"#00ADD8", Rust:"#dea584", PHP:"#4F5D95", Shell:"#89e051",
   HTML:"#e34c26", CSS:"#563d7c", Swift:"#F05138", Dart:"#00B4AB", Lua:"#000080", Smali:"#c0c0c0", Makefile:"#427819" };
@@ -146,7 +146,7 @@ async function load() {
     categories = cats;
     $("avatar").src = user.avatar_url; $("avatar").hidden = false;
     $("login").textContent = user.login;
-    repos = list.filter(r => r.name.toLowerCase() !== SELF);
+    repos = list.filter(r => !HIDDEN.includes(r.name.toLowerCase()));
     const langs = [...new Set(repos.map(r => r.language).filter(Boolean))].sort();
     $("lang").innerHTML = '<option value="">All languages</option>' + langs.map(l => `<option>${esc(l)}</option>`).join("");
     const catNames = [...categories.map(c => c.name), ...(repos.some(r => categoryOf(r) === OTHER) ? [OTHER] : [])];

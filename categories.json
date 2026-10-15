@@ -41,12 +41,5 @@
     "repos": [
       "apk-uploader"
     ]
-  },
-  {
-    "name": "Misc",
-    "description": "Everything else",
-    "repos": [
-      ".github"
-    ]
   }
 ]
