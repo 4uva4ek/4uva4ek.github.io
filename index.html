@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Каталог репозиториев · 4uva4ek</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #fff; --text: #1b1f24; --muted: #5d6673; --border: #dde1e6;
+    --accent: #2f6feb; --chip: #eef1f5; --warn: #9a6700;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0e1116; --card: #161b22; --text: #e6edf3; --muted: #8b949e; --border: #2a313c;
+      --accent: #58a6ff; --chip: #212833; --warn: #d29922;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+  header { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+  header img { width: 52px; height: 52px; border-radius: 50%; }
+  h1 { font-size: 22px; margin: 0; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  input, select, button { font: inherit; color: var(--text); background: var(--card);
+    border: 1px solid var(--border); border-radius: 8px; padding: 7px 10px; }
+  input[type=search] { flex: 1 1 220px; min-width: 0; }
+  label.chk { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 14px; }
+  button { cursor: pointer; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .card a.name { color: var(--accent); font-weight: 600; text-decoration: none; word-break: break-word; }
+  .card a.name:hover { text-decoration: underline; }
+  .desc { color: var(--muted); font-size: 14px; margin: 0; flex: 1; }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; color: var(--muted); align-items: center; }
+  .chip { background: var(--chip); border-radius: 999px; padding: 1px 8px; }
+  .chip.warn { color: var(--warn); }
+  .links { display: flex; gap: 12px; font-size: 13px; }
+  .links a { color: var(--accent); text-decoration: none; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .status { color: var(--muted); padding: 24px 0; text-align: center; }
+  details { margin-top: 28px; color: var(--muted); font-size: 13px; }
+  details .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  details input { flex: 1 1 260px; min-width: 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <img id="avatar" alt="" hidden>
+    <div>
+      <h1>Репозитории <span id="login">4uva4ek</span></h1>
+      <div class="sub" id="summary">Загрузка…</div>
+    </div>
+  </header>
+
+  <div class="bar">
+    <input type="search" id="q" placeholder="Поиск по названию, описанию, теме…">
+    <select id="lang"><option value="">Все языки</option></select>
+    <select id="sort">
+      <option value="pushed">Недавно обновлённые</option>
+      <option value="stars">По звёздам</option>
+      <option value="name">По имени</option>
+      <option value="created">Недавно созданные</option>
+    </select>
+    <label class="chk"><input type="checkbox" id="forks" checked> форки</label>
+    <label class="chk"><input type="checkbox" id="archived"> архив</label>
+  </div>
+
+  <div id="list" class="grid"></div>
+  <div id="status" class="status"></div>
+
+  <details>
+    <summary>Показать и приватные репозитории</summary>
+    <p>Без токена страница видит только публичные репозитории. Чтобы увидеть приватные,
+      вставь GitHub-токен с правом чтения репозиториев (fine-grained, «Metadata: read»).
+      Он хранится только в этом браузере (localStorage) и отправляется только на api.github.com.</p>
+    <div class="row">
+      <input type="password" id="token" placeholder="github_pat_…" autocomplete="off">
+      <button id="saveToken">Сохранить</button>
+      <button id="clearToken">Забыть</button>
+    </div>
+  </details>
+</div>
+
+<script>
+const USER = "4uva4ek";
+const SELF = USER.toLowerCase() + ".github.io";
+const LANG_COLORS = { JavaScript:"#f1e05a", TypeScript:"#3178c6", Python:"#3572A5", "C++":"#f34b7d", C:"#555555",
+  "C#":"#178600", Java:"#b07219", Kotlin:"#A97BFF", Go:"#00ADD8", Rust:"#dea584", PHP:"#4F5D95", Shell:"#89e051",
+  HTML:"#e34c26", CSS:"#563d7c", Swift:"#F05138", Dart:"#00B4AB", Lua:"#000080", Smali:"#c0c0c0", Makefile:"#427819" };
+
+const $ = id => document.getElementById(id);
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} }
+};
+let repos = [];
+
+async function gh(path, token) {
+  const headers = { Accept: "application/vnd.github+json" };
+  if (token) headers.Authorization = "Bearer " + token;
+  const out = [];
+  let url = "https://api.github.com" + path;
+  while (url) {
+    const r = await fetch(url, { headers });
+    if (!r.ok) {
+      const left = r.headers.get("x-ratelimit-remaining");
+      throw new Error(left === "0" ? "Лимит запросов GitHub API исчерпан, попробуй позже" : `GitHub API: ${r.status}`);
+    }
+    const data = await r.json();
+    if (!Array.isArray(data)) return data;
+    out.push(...data);
+    const next = (r.headers.get("link") || "").match(/<([^>]+)>;\s*rel="next"/);
+    url = next ? next[1] : null;
+  }
+  return out;
+}
+
+async function load() {
+  const token = store.get("gh_token");
+  $("status").textContent = "Загрузка…";
+  try {
+    const [user, list] = await Promise.all([
+      gh(token ? "/user" : `/users/${USER}`, token),
+      token ? gh("/user/repos?per_page=100&affiliation=owner", token)
+            : gh(`/users/${USER}/repos?per_page=100&type=owner`)
+    ]);
+    $("avatar").src = user.avatar_url; $("avatar").hidden = false;
+    $("login").textContent = user.login;
+    repos = list.filter(r => r.name.toLowerCase() !== SELF);
+    const langs = [...new Set(repos.map(r => r.language).filter(Boolean))].sort();
+    $("lang").innerHTML = '<option value="">Все языки</option>' + langs.map(l => `<option>${esc(l)}</option>`).join("");
+    render();
+  } catch (e) {
+    if (token && /401/.test(e.message)) { store.set("gh_token", null); return load(); }
+    $("status").textContent = e.message;
+  }
+}
+
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
+function ago(iso) {
+  const d = (Date.now() - new Date(iso)) / 864e5;
+  if (d < 1) return "сегодня";
+  if (d < 30) return Math.floor(d) + " дн. назад";
+  if (d < 365) return Math.floor(d / 30) + " мес. назад";
+  return Math.floor(d / 365) + " г. назад";
+}
+
+function render() {
+  const q = $("q").value.trim().toLowerCase();
+  const lang = $("lang").value, sort = $("sort").value;
+  const showForks = $("forks").checked, showArch = $("archived").checked;
+  const items = repos.filter(r =>
+    (showForks || !r.fork) && (showArch || !r.archived) && (!lang || r.language === lang) &&
+    (!q || [r.name, r.description, ...(r.topics || [])].join(" ").toLowerCase().includes(q))
+  ).sort({
+    pushed: (a, b) => new Date(b.pushed_at) - new Date(a.pushed_at),
+    created: (a, b) => new Date(b.created_at) - new Date(a.created_at),
+    stars: (a, b) => b.stargazers_count - a.stargazers_count,
+    name: (a, b) => a.name.localeCompare(b.name)
+  }[sort]);
+
+  const priv = repos.filter(r => r.private).length;
+  $("summary").textContent = `${repos.length} репозиториев` + (priv ? `, из них ${priv} приватных` : "") +
+    ` · показано ${items.length} · данные с GitHub в реальном времени`;
+  $("status").textContent = items.length ? "" : "Ничего не найдено";
+
+  $("list").innerHTML = items.map(r => {
+    const pages = r.has_pages ? `https://${r.owner.login.toLowerCase()}.github.io/${r.name}/` : null;
+    const home = r.homepage && r.homepage !== pages ? r.homepage : null;
+    return `<div class="card">
+      <a class="name" href="${esc(r.html_url)}" target="_blank" rel="noopener">${esc(r.name)}</a>
+      <p class="desc">${esc(r.description || "Без описания")}</p>
+      <div class="meta">
+        ${r.language ? `<span><span class="dot" style="background:${LANG_COLORS[r.language] || "#999"}"></span> ${esc(r.language)}</span>` : ""}
+        ${r.stargazers_count ? `<span>★ ${r.stargazers_count}</span>` : ""}
+        ${r.private ? `<span class="chip warn">private</span>` : ""}
+        ${r.fork ? `<span class="chip">fork</span>` : ""}
+        ${r.archived ? `<span class="chip">archived</span>` : ""}
+        ${(r.topics || []).map(t => `<span class="chip">${esc(t)}</span>`).join("")}
+        <span>· ${ago(r.pushed_at)}</span>
+      </div>
+      ${pages || home ? `<div class="links">
+        ${pages ? `<a href="${esc(pages)}" target="_blank" rel="noopener">Pages ↗</a>` : ""}
+        ${home ? `<a href="${esc(home)}" target="_blank" rel="noopener">Сайт ↗</a>` : ""}
+      </div>` : ""}
+    </div>`;
+  }).join("");
+}
+
+["q", "lang", "sort", "forks", "archived"].forEach(id => $(id).addEventListener("input", render));
+$("saveToken").onclick = () => { const t = $("token").value.trim(); if (t) { store.set("gh_token", t); $("token").value = ""; load(); } };
+$("clearToken").onclick = () => { store.set("gh_token", null); load(); };
+load();
+</script>
+</body>
+</html>
