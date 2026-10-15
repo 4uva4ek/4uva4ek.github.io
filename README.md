@@ -7,3 +7,7 @@ A live catalog of all [4uva4ek](https://github.com/4uva4ek)'s repositories.
 Every time the page loads it fetches the list straight from the GitHub API, so new repositories show up automatically — nothing to update. Shows the latest release (version + link) for each repo. Search, language filter, sorting, hide forks/archived.
 
 Private repositories appear if you paste your own token at the bottom of the page (stored only in your browser).
+
+## Categories
+
+Repositories are grouped by [`categories.json`](categories.json) — edit it to move repos between categories, rename or reorder them. A repo not listed there lands in **Other** automatically.

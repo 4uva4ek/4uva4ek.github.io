@@ -43,6 +43,10 @@
   .release { font-size: 13px; color: var(--muted); }
   .release a { color: var(--accent); text-decoration: none; font-weight: 600; }
   .release a:hover { text-decoration: underline; }
+  .cat { margin: 0 0 28px; }
+  .cat h2 { font-size: 17px; margin: 0; display: flex; align-items: baseline; gap: 8px; }
+  .cat h2 .n { color: var(--muted); font-size: 13px; font-weight: 400; }
+  .cat p.cdesc { color: var(--muted); font-size: 13px; margin: 2px 0 10px; }
   .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
   .status { color: var(--muted); padding: 24px 0; text-align: center; }
   details { margin-top: 28px; color: var(--muted); font-size: 13px; }
@@ -62,6 +66,7 @@
 
   <div class="bar">
     <input type="search" id="q" placeholder="Search by name, description, topic…">
+    <select id="cat"><option value="">All categories</option></select>
     <select id="lang"><option value="">All languages</option></select>
     <select id="sort">
       <option value="pushed">Recently updated</option>
@@ -69,11 +74,12 @@
       <option value="name">Name</option>
       <option value="created">Recently created</option>
     </select>
+    <label class="chk"><input type="checkbox" id="group" checked> group</label>
     <label class="chk"><input type="checkbox" id="forks" checked> forks</label>
     <label class="chk"><input type="checkbox" id="archived"> archived</label>
   </div>
 
-  <div id="list" class="grid"></div>
+  <div id="list"></div>
   <div id="status" class="status"></div>
 
   <details>
@@ -102,6 +108,8 @@ const store = {
   set(k, v) { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch {} }
 };
 let repos = [];
+let categories = []; // from categories.json: [{ name, description, repos: [...] }]
+const OTHER = "Other";
 const releases = {}; // full_name -> release object, null (none) or undefined (loading)
 const RELEASE_TTL = 15 * 60e3; // cache releases for 15 min to stay within the API rate limit
 
@@ -129,16 +137,20 @@ async function load() {
   const token = store.get("gh_token");
   $("status").textContent = "Loading…";
   try {
-    const [user, list] = await Promise.all([
+    const [user, list, cats] = await Promise.all([
       gh(token ? "/user" : `/users/${USER}`, token),
       token ? gh("/user/repos?per_page=100&affiliation=owner", token)
-            : gh(`/users/${USER}/repos?per_page=100&type=owner`)
+            : gh(`/users/${USER}/repos?per_page=100&type=owner`),
+      fetch("categories.json", { cache: "no-cache" }).then(r => r.ok ? r.json() : []).catch(() => [])
     ]);
+    categories = cats;
     $("avatar").src = user.avatar_url; $("avatar").hidden = false;
     $("login").textContent = user.login;
     repos = list.filter(r => r.name.toLowerCase() !== SELF);
     const langs = [...new Set(repos.map(r => r.language).filter(Boolean))].sort();
     $("lang").innerHTML = '<option value="">All languages</option>' + langs.map(l => `<option>${esc(l)}</option>`).join("");
+    const catNames = [...categories.map(c => c.name), ...(repos.some(r => categoryOf(r) === OTHER) ? [OTHER] : [])];
+    $("cat").innerHTML = '<option value="">All categories</option>' + catNames.map(c => `<option>${esc(c)}</option>`).join("");
     render();
     loadReleases(token);
   } catch (e) {
@@ -179,6 +191,11 @@ function releaseHtml(r) {
     ${rel.pre ? `<span class="chip warn">pre-release</span>` : ""} · ${ago(rel.date)}</div>`;
 }
 
+function categoryOf(r) {
+  const n = r.name.toLowerCase();
+  return categories.find(c => c.repos.some(x => x.toLowerCase() === n))?.name || OTHER;
+}
+
 function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
 function ago(iso) {
   const d = (Date.now() - new Date(iso)) / 864e5;
@@ -190,10 +207,10 @@ function ago(iso) {
 
 function render() {
   const q = $("q").value.trim().toLowerCase();
-  const lang = $("lang").value, sort = $("sort").value;
+  const lang = $("lang").value, sort = $("sort").value, cat = $("cat").value, group = $("group").checked;
   const showForks = $("forks").checked, showArch = $("archived").checked;
   const items = repos.filter(r =>
-    (showForks || !r.fork) && (showArch || !r.archived) && (!lang || r.language === lang) &&
+    (showForks || !r.fork) && (showArch || !r.archived) && (!lang || r.language === lang) && (!cat || categoryOf(r) === cat) &&
     (!q || [r.name, r.description, ...(r.topics || [])].join(" ").toLowerCase().includes(q))
   ).sort({
     pushed: (a, b) => new Date(b.pushed_at) - new Date(a.pushed_at),
@@ -207,31 +224,41 @@ function render() {
     ` · showing ${items.length} · live data from GitHub`;
   $("status").textContent = items.length ? "" : "Nothing found";
 
-  $("list").innerHTML = items.map(r => {
-    const pages = r.has_pages ? `https://${r.owner.login.toLowerCase()}.github.io/${r.name}/` : null;
-    const home = r.homepage && r.homepage !== pages ? r.homepage : null;
-    return `<div class="card">
-      <a class="name" href="${esc(r.html_url)}" target="_blank" rel="noopener">${esc(r.name)}</a>
-      <p class="desc">${esc(r.description || "No description")}</p>
-      <div class="meta">
-        ${r.language ? `<span><span class="dot" style="background:${LANG_COLORS[r.language] || "#999"}"></span> ${esc(r.language)}</span>` : ""}
-        ${r.stargazers_count ? `<span>★ ${r.stargazers_count}</span>` : ""}
-        ${r.private ? `<span class="chip warn">private</span>` : ""}
-        ${r.fork ? `<span class="chip">fork</span>` : ""}
-        ${r.archived ? `<span class="chip">archived</span>` : ""}
-        ${(r.topics || []).map(t => `<span class="chip">${esc(t)}</span>`).join("")}
-        <span>· ${ago(r.pushed_at)}</span>
-      </div>
-      ${releaseHtml(r)}
-      ${pages || home ? `<div class="links">
-        ${pages ? `<a href="${esc(pages)}" target="_blank" rel="noopener">Pages ↗</a>` : ""}
-        ${home ? `<a href="${esc(home)}" target="_blank" rel="noopener">Website ↗</a>` : ""}
-      </div>` : ""}
-    </div>`;
+  const grid = list => `<div class="grid">${list.map(card).join("")}</div>`;
+  if (!group) { $("list").innerHTML = grid(items); return; }
+  $("list").innerHTML = [...categories, { name: OTHER, description: "Not assigned to a category yet" }].map(c => {
+    const list = items.filter(r => categoryOf(r) === c.name);
+    return list.length ? `<section class="cat">
+      <h2>${esc(c.name)} <span class="n">${list.length}</span></h2>
+      ${c.description ? `<p class="cdesc">${esc(c.description)}</p>` : ""}
+      ${grid(list)}</section>` : "";
   }).join("");
 }
 
-["q", "lang", "sort", "forks", "archived"].forEach(id => $(id).addEventListener("input", render));
+function card(r) {
+  const pages = r.has_pages ? `https://${r.owner.login.toLowerCase()}.github.io/${r.name}/` : null;
+  const home = r.homepage && r.homepage !== pages ? r.homepage : null;
+  return `<div class="card">
+    <a class="name" href="${esc(r.html_url)}" target="_blank" rel="noopener">${esc(r.name)}</a>
+    <p class="desc">${esc(r.description || "No description")}</p>
+    <div class="meta">
+      ${r.language ? `<span><span class="dot" style="background:${LANG_COLORS[r.language] || "#999"}"></span> ${esc(r.language)}</span>` : ""}
+      ${r.stargazers_count ? `<span>★ ${r.stargazers_count}</span>` : ""}
+      ${r.private ? `<span class="chip warn">private</span>` : ""}
+      ${r.fork ? `<span class="chip">fork</span>` : ""}
+      ${r.archived ? `<span class="chip">archived</span>` : ""}
+      ${(r.topics || []).map(t => `<span class="chip">${esc(t)}</span>`).join("")}
+      <span>· ${ago(r.pushed_at)}</span>
+    </div>
+    ${releaseHtml(r)}
+    ${pages || home ? `<div class="links">
+      ${pages ? `<a href="${esc(pages)}" target="_blank" rel="noopener">Pages ↗</a>` : ""}
+      ${home ? `<a href="${esc(home)}" target="_blank" rel="noopener">Website ↗</a>` : ""}
+    </div>` : ""}
+  </div>`;
+}
+
+["q", "cat", "lang", "sort", "group", "forks", "archived"].forEach(id => $(id).addEventListener("input", render));
 $("saveToken").onclick = () => { const t = $("token").value.trim(); if (t) { store.set("gh_token", t); $("token").value = ""; load(); } };
 $("clearToken").onclick = () => { store.set("gh_token", null); load(); };
 load();

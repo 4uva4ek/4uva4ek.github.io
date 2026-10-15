@@ -1,0 +1,32 @@
+[
+  {
+    "name": "Galaxy XR · System & Root",
+    "description": "Kernel, root and system-level modules for Samsung Galaxy XR",
+    "repos": ["KernelSU-GXR", "galaxyxr-modules"]
+  },
+  {
+    "name": "Galaxy XR · PC VR & Streaming",
+    "description": "Connecting Galaxy XR to a PC: SteamVR drivers, link and game streaming",
+    "repos": ["galaxyxr-vrlink", "GalaxyXR-Driver", "galaxy-xr-game-link", "moonlight-vplus"]
+  },
+  {
+    "name": "Galaxy XR · Game Porting",
+    "description": "Running converted Quest and other XR games on Galaxy XR",
+    "repos": ["overport-galaxyxr", "openxr-dispatcher-open", "xr-porting-hub", "galaxyxr-hand-map"]
+  },
+  {
+    "name": "Other VR & Controllers",
+    "description": "Other headsets and gamepads",
+    "repos": ["PSVR2Toolkit", "ApexSenseBridge"]
+  },
+  {
+    "name": "Tools & Utilities",
+    "description": "Standalone tools",
+    "repos": ["apk-uploader", "model-to-ollama", "ffa-downloader"]
+  },
+  {
+    "name": "Misc",
+    "description": "Everything else",
+    "repos": [".github", "Transfer-Symfony-5-", "link"]
+  }
+]
