@@ -1,9 +1,9 @@
-# Каталог репозиториев
+# Repository catalog
 
-Динамический каталог всех репозиториев [4uva4ek](https://github.com/4uva4ek).
+A live catalog of all [4uva4ek](https://github.com/4uva4ek)'s repositories.
 
-**Открыть:** https://4uva4ek.github.io/
+**Open:** https://4uva4ek.github.io/
 
-Страница при каждом открытии берёт список прямо из GitHub API — новые репозитории появляются сами, ничего обновлять не нужно. Поиск, фильтр по языку, сортировка, скрытие форков/архива.
+Every time the page loads it fetches the list straight from the GitHub API, so new repositories show up automatically — nothing to update. Search, language filter, sorting, hide forks/archived.
 
-Приватные репозитории видны, если вставить свой токен внизу страницы (хранится только в браузере).
+Private repositories appear if you paste your own token at the bottom of the page (stored only in your browser).
